@@ -1,2 +1,78 @@
-import plotly.io as pio
-pio.write_html(fig, file=’index.html’, auto_open=True)
+
+
+def predict_covid(country,end_date,days):
+    
+    from datetime import datetime, timedelta,date
+    import pandas as pd
+    %matplotlib inline
+    import matplotlib.pyplot as plt
+    import numpy as np
+    import pandas as pd
+    import numpy as np
+    from fbprophet import Prophet
+    import matplotlib.pyplot as plt
+    from sklearn.metrics import mean_squared_error, r2_score, mean_absolute_error
+    import plotly.offline as pyoff
+    import plotly.graph_objs as go
+    import plotly.express as px
+
+    conso = pd.DataFrame(columns=['Last Update','Country/Region','Confirmed','Deaths','Recovered'])
+    fi_date= pd.read_csv(r'C:\Users\Utilisateur\Desktop\DATAMINK\sultan center\Data\Data_panda\date_covid.csv',dayfirst=True,delimiter=';',decimal='.',parse_dates=['Date']) 
+    fi_date=fi_date[fi_date['Date']<end_date]
+    fi_date['Date'] = fi_date['Date'].dt.strftime('%m-%d-%Y')
+    col_one_list = fi_date['Date'].tolist()
+    #col_one_list=pd.to_datetime(col_one_list).date
+    
+    for day in col_one_list:
+        address='https://raw.githubusercontent.com/CSSEGISandData/COVID-19/master/csse_covid_19_data/csse_covid_19_daily_reports/'+str(day)+'.csv'
+        fi2=pd.read_csv(address,parse_dates=['Last Update'],error_bad_lines=False,dayfirst=True,delimiter=',',decimal='.')
+        fi2=fi2[['Last Update','Country/Region','Confirmed','Deaths','Recovered']]
+        conso = conso.append(fi2,ignore_index=False)
+        
+    conso2=conso[conso['Country/Region']==country]
+    conso2['Last Update'] = conso2['Last Update'].dt.strftime('%m-%d-%Y')
+    conso2=pd.pivot_table(conso2,values=['Confirmed','Deaths'],index=['Last Update', 'Country/Region'],aggfunc=np.max)
+    conso2=conso2.fillna(0)
+    conso2=conso2.reset_index()
+    
+    df=conso2
+    df=df.rename(columns={'Last Update':'ds', 'Confirmed':'y'})
+    df = df[['ds','y']]
+    model = Prophet(changepoint_prior_scale=0.5,changepoint_range = 0.95,yearly_seasonality=True,weekly_seasonality=True,interval_width=0.75)
+    model.fit(df)
+    future = model.make_future_dataframe(periods= days, freq = 'd')
+    future.tail()
+    forecast = model.predict(future)
+    
+    metric_df = forecast.set_index('ds')[['yhat']].join(df.set_index('ds').y).reset_index()
+    metric_df=metric_df.rename(columns={'ds':'date', 'yhat':'prediction', 'y':'real'})
+    
+    
+    #fig=go.Fig
+    #fig = px.line(metric_df, x="date", y="prediction", title='Covid-19 real vs prediction in '+str(country))
+    #fig.add_scatter(x=metric_df['date'], y=metric_df['real'], mode='bars',name='real')
+    #fig.add_scatter(x=metric_df['date'], y=metric_df['prediction'], mode='lines',name='predicted')
+    
+    fig = go.Figure(data=[
+    go.Bar(name='real', x=metric_df['date'], y=metric_df['real']),
+    go.Bar(name='predicted', x=metric_df['date'], y=metric_df['prediction'])
+     ])
+    # Change the bar mode
+    fig.update_layout(barmode='group')
+    fig.update_layout(title_text='Covid-19 confirmed cased vs prediction in '+str(country),
+                     xaxis_title="date",
+                     yaxis_title="cases")
+    #fig.show()
+    
+    #model.plot(forecast,uncertainty=True)
+    import plotly.io as pio
+    pio.write_html(fig, file=’index.html’, auto_open=True)  
+                                              
+    
+    return fig
+
+predict_covid('Spain','2020-03-12',25)
+                                              
+                                        
+                                              
+                                              
