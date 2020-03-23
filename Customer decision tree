@@ -1,0 +1,104 @@
+def cdt_by_product(data,category,segment,min_trans_single,min_trans_couple):
+ 
+ %matplotlib inline
+ from scipy.cluster.hierarchy import dendrogram, linkage
+ import scipy.cluster.hierarchy as shc
+ import plotly.figure_factory as ff
+ import time
+ t0 = time.time() 
+ 
+ data=fichier[['transtime','card','ticket','catname','itemcode','itemname','units']]
+ data=data[data['card']!=-1]
+ data = data[data['catname'] == str(category)]
+seg_client=pd.read_csv(r'C:\Users\Utilisateur\Desktop\DATAMINK\sultan center\Data\Data_panda\Customers_segmentation_final.csv',delimiter=',',decimal='.') 
+ seg_client=seg_client[seg_client['Segment'].isin(segment)]
+ list_card=seg_client['customer_id'].unique()
+ data = data[data['card'].isin(list_card)]
+ 
+ 
+ data_set=pd.DataFrame(data=data[{"itemcode","itemname"}],columns=['itemcode','itemname']).drop_duplicates('itemcode')
+ 
+ fi1=pd.crosstab(data.card, data.itemcode).reset_index()
+ fi2=pd.crosstab([data.card,data.ticket],data.itemcode).reset_index()
+ fi3=pd.pivot_table(data,index= 'itemcode',values= 'units', aggfunc= 'sum').reset_index()
+ fi3=fi3[(fi3['units'] > min_trans_single)]
+ 
+ list_card=pd.DataFrame({'card':data['card'].unique()})
+ list_prod=pd.DataFrame({'itemcode':fi3['itemcode'].unique()})
+ 
+ 
+ a1 = []
+ a2 = []
+ 
+ #Create combination of couple of product
+ 
+ for i in range(0,len(list_prod)):
+ for j in range(0,len(list_prod)):
+ if i != j:
+ a1.append(list_prod['itemcode'][i])
+ a2.append(list_prod['itemcode'][j])
+tt = pd.DataFrame(list(zip(a1, a2)), 
+ columns =['Item1', 'Item2'])
+ b1 = []
+ b2 = []
+ b3 = []
+ b4 = []
+ b5 = []
+ b6 = []
+ b7 = []
+ b8 = []
+ 
+ #loop for item couple
+ for k in range(0,len(tt)):
+ a=0
+ b=0
+ c=0
+ d=0 
+ 
+ #couple
+ item1 = tt['Item1'][k]
+ item2 = tt['Item2'][k]
+ 
+ #get card number for customers who bought at least one time each product
+ condition = (fi1[item1]>0) & (fi1[item2]>0)
+ list_check=fi1[condition]['card']
+ list_check=list_check.unique()
+ st4 = fi2[fi2['card'].isin(list_check)]
+# calculate item couple ticket combinaison
+ a =len(st4[(st4[item1] == 0) & (st4[item2] == 0)])
+ b =len(st4[(st4[item1] == 0) & (st4[item2] > 0)])
+ c =len(st4[(st4[item1] > 0) & (st4[item2] == 0)])
+ d =len(st4[(st4[item1] > 0) & (st4[item2] > 0)])
+ 
+ # create similarity table with Yule's Q
+ if (a*d+b*c) !=0:
+ b1.append(item1)
+ b2.append(item2)
+ b3.append(a)
+ b4.append(b)
+ b5.append(c)
+ b6.append(d)
+ b7.append(a + b + c + d)
+ b8.append(1+(a*d-b*c)/(a*d+b*c))
+ simil = pd.DataFrame(list(zip(b1,b2,b3,b4,b5,b6,b7,b8)), 
+ columns =['itemcode','Item2','A:none', 'B:only item2','C:only item1','D:both','Total','Yules'])
+# Filter products with minimum transactions threshold 
+ simil=simil[(simil['Total'] > min_trans_couple)]
+ simil=pd.crosstab(simil.itemcode,simil.Item2,values=simil.Yules,aggfunc='sum').reset_index()
+ simil=simil.fillna(0)
+ 
+ # prepare dendrogram labels
+ names_item = pd.merge(simil, data_set, on='itemcode', how='left')
+ names=names_item['itemname'].values.tolist()
+ 
+ # array to create the dendrogram
+ fi=simil.drop(columns=['itemcode'])
+ 
+ #dendrogram
+ fig = ff.create_dendrogram(fi, orientation='left', labels=names)
+ fig.update_layout(width=2000, height=3000)
+ fig.show()
+t1 = time.time()
+ r=t1-t0 
+ 
+ return r
